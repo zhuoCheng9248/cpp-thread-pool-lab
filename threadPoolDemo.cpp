@@ -5,6 +5,7 @@
 #include <iostream>
 #include <mutex>
 #include <queue>
+#include <stdexcept>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -39,7 +40,7 @@ ThreadPool::ThreadPool(size_t n) {
               std::unique_lock<std::mutex> lock(mtx);
 
               cv.wait(lock, [this] { return !tasks.empty() || stop; });
-              if (stop) {
+              if (stop && tasks.empty()) {
                 break;
               }
               task = tasks.front();
@@ -93,6 +94,9 @@ auto ThreadPool::submit(F&& f, Args&&... args) {
   // 6. 将任务放入共享队列（临界区）
   {
     std::lock_guard<std::mutex> lock(mtx);
+    if (stop) {
+      throw std::runtime_error("ThreadPool is stopped");
+    }
 
     // lambda 按值捕获 shared_ptr，因此 lambda 是可拷贝的，
     // 可以安全地转换为 std::function<void()> 存入队列。
